@@ -1,0 +1,4 @@
+{
+  "$schema": "https://v2.dev.nuxt.com/docs/schema",
+  "extends": "./.nuxt/tsconfig.app.json"
+}
