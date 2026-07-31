@@ -9,5 +9,8 @@ export default defineNuxtConfig({
   alias: {
     "~core": "./core",
     "~workers": "./app/workers",
+    "@": ".",
   },
+  modules: ["@nuxtjs/tailwindcss"],
+  css: ["@/assets/css/main.css"],
 });
