@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useErrorStore } from "~/stores/error";
-import { getErrorUIConfig } from "~core/errors";
+import { getErrorUIConfig } from "~/core/errors";
 
 const errorStore = useErrorStore();
 

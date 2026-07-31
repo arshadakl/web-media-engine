@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { ExportPlan } from "~core/export/hybrid-exporter";
+import type { ExportPlan } from "~/core/export/hybrid-exporter";
 
 export interface ExportState {
   isExporting: boolean;

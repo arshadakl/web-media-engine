@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { AppError } from "~core/errors";
+import type { AppError } from "~/core/errors";
 
 export interface ErrorState {
   errors: AppError[];

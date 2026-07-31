@@ -1,9 +1,9 @@
 import { defineStore } from "pinia";
-import type { Segment, RuleConfig } from "~core/timeline/timeline-types";
-import type { EDL } from "~core/timeline/edl";
-import { createDefaultRuleConfig } from "~core/timeline/timeline-types";
-import { buildRulesPipeline } from "~core/timeline/rules";
-import { generateEDL } from "~core/timeline/edl";
+import type { Segment, RuleConfig } from "~/core/timeline/timeline-types";
+import type { EDL } from "~/core/timeline/edl";
+import { createDefaultRuleConfig } from "~/core/timeline/timeline-types";
+import { buildRulesPipeline } from "~/core/timeline/rules";
+import { generateEDL } from "~/core/timeline/edl";
 
 export interface TimelineState {
   rawSegments: Segment[];

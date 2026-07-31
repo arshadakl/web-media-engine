@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { SeekState } from "~core/preview/seek-engine";
+import type { SeekState } from "~/core/preview/seek-engine";
 
 export interface PreviewState {
   isPlaying: boolean;

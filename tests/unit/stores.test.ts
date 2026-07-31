@@ -5,7 +5,7 @@ import { useTimelineStore } from "../../stores/timeline";
 import { usePreviewStore } from "../../stores/preview";
 import { useExportStore } from "../../stores/export";
 import { useErrorStore } from "../../stores/error";
-import { AppError } from "~core/errors";
+import { AppError } from "~/core/errors";
 
 describe("File Store", () => {
   beforeEach(() => {
