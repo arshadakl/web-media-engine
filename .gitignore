@@ -1,0 +1,80 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+.output/
+.nuxt/
+.vercel/
+.netlify/
+
+# Nuxt dev/build outputs
+.cache/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# ESLint
+.eslintcache
+
+# Local overrides
+*.local
+
+# Cloudflare
+.wrangler/
+.dev.vars
+
+# WASM binaries (will be downloaded/cached)
+*.wasm
+
+# Large binary fixtures (test files)
+tests/fixtures/*.mp4
+tests/fixtures/*.mkv
+tests/fixtures/*.webm
+tests/fixtures/*.avi
+tests/fixtures/*.mov
+
+# Generated files (re-generate as needed)
+public/models/*.onnx
+
+# Development plan files (internal docs, not source code)
+silence-cutter-dev-plan.md
+OPCODEX-DEV-PLAN.md
