@@ -22,8 +22,8 @@ export interface VADWorkerRequest extends WorkerMessage {
 }
 
 export interface VADWorkerResponse extends WorkerResponse {
-  type: "chunk-result";
-  payload: {
+  type: "chunk-result" | "init-complete";
+  payload?: {
     frames: VADFrame[];
   };
 }
@@ -37,7 +37,8 @@ export interface ExportWorkerRequest extends WorkerMessage {
 }
 
 export interface ExportWorkerResponse extends WorkerResponse {
-  type: "export-progress" | "export-complete" | "export-error";
+  type:
+    "export-progress" | "export-complete" | "export-error" | "export-cancelled";
   payload?: {
     progress: number;
     step: string;
