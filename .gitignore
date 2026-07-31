@@ -1,31 +1,28 @@
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
-
-# Build outputs
-dist/
-.output/
-.nuxt/
-.vercel/
-.netlify/
-
 # Nuxt dev/build outputs
-.cache/
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
 
-# Environment files
+# Node dependencies
+node_modules
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+.fleet
+.idea
+Thumbs.db
+
+# Local env files
 .env
 .env.*
 !.env.example
-
-# IDE / Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
 
 # Testing
 coverage/
@@ -33,36 +30,17 @@ test-results/
 playwright-report/
 blob-report/
 
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
 # TypeScript
 *.tsbuildinfo
 
 # ESLint
 .eslintcache
 
-# Local overrides
-*.local
-
 # Cloudflare
 .wrangler/
 .dev.vars
 
-# WASM binaries (will be downloaded/cached)
+# WASM binaries (downloaded/cached at runtime)
 *.wasm
 
 # Large binary fixtures (test files)
