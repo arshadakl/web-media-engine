@@ -2,28 +2,6 @@
 
 Browser-native video silence removal. No server, no upload — everything runs client-side.
 
-## Architecture
-
-```
-silence-cutter/
-├── core/                    # Framework-agnostic processing SDK
-│   ├── audio/               # File I/O, PCM extraction, ring buffer
-│   ├── vad/                 # Silero VAD + ONNX Runtime inference
-│   ├── timeline/            # Segment builder, rules engine, EDL
-│   ├── export/              # Keyframe probe, hybrid copy/reencode
-│   └── utils/               # Logger, memory guard, worker manager
-├── app/
-│   ├── components/          # Vue 3 + shadcn-vue UI
-│   ├── composables/         # Reactive helpers
-│   ├── stores/              # Pinia state management
-│   └── workers/             # Web Worker entry points
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── fixtures/
-└── public/models/           # Silero VAD ONNX model
-```
-
 **Core principle:** `core/` has zero dependency on Vue, Nuxt, or any UI framework. Workers import from `core/`. Vue imports only from `composables/` and `stores/`.
 
 ## Tech Stack
@@ -143,7 +121,3 @@ npm run test:e2e     # E2E tests (Playwright)
 npm run lint         # ESLint
 npm run typecheck    # TypeScript check
 ```
-
-## License
-
-MIT
