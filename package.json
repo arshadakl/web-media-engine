@@ -39,6 +39,7 @@
     "@lucide/vue": "^1.28.0",
     "@nuxt/eslint": "^1.16.0",
     "@nuxtjs/tailwindcss": "^6.14.0",
+    "@vitejs/plugin-vue": "^6.0.8",
     "@vue/test-utils": "^2.4.11",
     "@vueuse/core": "^14.4.0",
     "class-variance-authority": "^0.7.1",
