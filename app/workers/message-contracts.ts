@@ -13,36 +13,44 @@ export interface WorkerResponse {
   error?: string;
 }
 
+// VAD Worker Messages
 export interface VADWorkerRequest extends WorkerMessage {
-  type: "process-chunk";
-  payload: {
-    pcmData: Float32Array;
-    sampleRate: number;
+  type: "init" | "process-chunk" | "reset";
+  payload?: {
+    pcmData?: Float32Array;
+    sampleRate?: number;
   };
 }
 
 export interface VADWorkerResponse extends WorkerResponse {
-  type: "chunk-result" | "init-complete";
+  type: "init-complete" | "chunk-result" | "reset-complete" | "error";
   payload?: {
-    frames: VADFrame[];
+    frames?: VADFrame[];
   };
 }
 
+// Export Worker Messages
 export interface ExportWorkerRequest extends WorkerMessage {
-  type: "start-export" | "cancel-export";
+  type: "init" | "start-export" | "cancel-export";
   payload?: {
-    edl: unknown;
-    file: File;
+    edl?: unknown;
+    file?: File;
+    sampleRate?: number;
   };
 }
 
 export interface ExportWorkerResponse extends WorkerResponse {
   type:
-    "export-progress" | "export-complete" | "export-error" | "export-cancelled";
+    | "init-complete"
+    | "export-progress"
+    | "export-complete"
+    | "export-error"
+    | "export-cancelled";
   payload?: {
-    progress: number;
-    step: string;
+    progress?: number;
+    step?: string;
     outputPath?: string;
+    filename?: string;
   };
 }
 
@@ -52,7 +60,12 @@ export function createMessageId(): number {
   return ++messageId;
 }
 
-export function createVADMessage(
+// VAD Messages
+export function createVADInitMessage(): VADWorkerRequest {
+  return { type: "init", id: createMessageId() };
+}
+
+export function createVADProcessMessage(
   pcmData: Float32Array,
   sampleRate: number,
 ): VADWorkerRequest {
@@ -63,20 +76,27 @@ export function createVADMessage(
   };
 }
 
+export function createVADResetMessage(): VADWorkerRequest {
+  return { type: "reset", id: createMessageId() };
+}
+
+// Export Messages
+export function createExportInitMessage(): ExportWorkerRequest {
+  return { type: "init", id: createMessageId() };
+}
+
 export function createExportStartMessage(
   edl: unknown,
   file: File,
+  sampleRate: number = 44100,
 ): ExportWorkerRequest {
   return {
     type: "start-export",
     id: createMessageId(),
-    payload: { edl, file },
+    payload: { edl, file, sampleRate },
   };
 }
 
 export function createExportCancelMessage(): ExportWorkerRequest {
-  return {
-    type: "cancel-export",
-    id: createMessageId(),
-  };
+  return { type: "cancel-export", id: createMessageId() };
 }
