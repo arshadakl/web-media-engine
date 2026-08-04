@@ -1,6 +1,6 @@
 # Silence Cutter
 
-Browser-native video silence removal. No server, no upload — everything runs client-side.
+Browser-native video silence removal. No server, no upload â€” everything runs client-side.
 
 ## Tech Stack
 
@@ -18,40 +18,40 @@ Browser-native video silence removal. No server, no upload — everything runs cli
 
 ```
 Input Video
-    ¦
+    Â¦
     ?
 +---------------------+
-¦  File Ingestion     ¦  <input> or synthetic demo generator
+Â¦  File Ingestion     Â¦  <input> or synthetic demo generator
 +---------------------+
-          ¦
+          Â¦
           ?
 +---------------------+
-¦  Audio Extraction   ¦  Web Audio API decodeAudioData ? PCM
+Â¦  Audio Extraction   Â¦  Web Audio API decodeAudioData ? PCM
 +---------------------+
-          ¦
+          Â¦
           ?
 +---------------------+
-¦  VAD Analysis       ¦  Silero VAD (ONNX) — speech/non-speech detection
-¦  (20ms frames)      ¦  Hysteresis: prevents jitter at boundaries
+Â¦  VAD Analysis       Â¦  Silero VAD (ONNX) â€” speech/non-speech detection
+Â¦  (20ms frames)      Â¦  Hysteresis: prevents jitter at boundaries
 +---------------------+
-          ¦
+          Â¦
           ?
 +---------------------+
-¦  Timeline Builder   ¦  VAD frames ? Segments ? EDL
-¦  (rules engine)     ¦  4 rules: min silence, min speech, padding, merge
+Â¦  Timeline Builder   Â¦  VAD frames ? Segments ? EDL
+Â¦  (rules engine)     Â¦  4 rules: min silence, min speech, padding, merge
 +---------------------+
-          ¦
+          Â¦
           ?
 +---------------------+
-¦  Interactive Edit   ¦  Click/drag on waveform to override cuts
-¦  (preview player)   ¦  Seek-loop playback of keep segments
+Â¦  Interactive Edit   Â¦  Click/drag on waveform to override cuts
+Â¦  (preview player)   Â¦  Seek-loop playback of keep segments
 +---------------------+
-          ¦
+          Â¦
           ?
 +---------------------+
-¦  Export             ¦  Download processed audio/video
+Â¦  Export             Â¦  Download processed audio/video
 +---------------------+
-          ¦
+          Â¦
           ?
     Output File
 ```
@@ -80,10 +80,6 @@ bun run preview
 # Type check
 bun run typecheck
 ```
-
-### Environment Variables
-
-Copy .env.example to .env.local and set your Gemini API key (optional):
 
 ```bash
 GEMINI_API_KEY=your_api_key_here
@@ -118,16 +114,16 @@ wrangler pages deploy dist --project-name=silence-cutter
 
 ```
 +-- core/                  # Core logic (framework-agnostic)
-¦   +-- audio/             # Audio processing (extractor, chunker, RMS)
-¦   +-- export/            # Export functionality
-¦   +-- timeline/          # Timeline builder, EDL, merger
-¦   +-- utils/             # Utilities (logger, memory guard, etc.)
-¦   +-- vad/               # Voice Activity Detection (Silero VAD)
+Â¦   +-- audio/             # Audio processing (extractor, chunker, RMS)
+Â¦   +-- export/            # Export functionality
+Â¦   +-- timeline/          # Timeline builder, EDL, merger
+Â¦   +-- utils/             # Utilities (logger, memory guard, etc.)
+Â¦   +-- vad/               # Voice Activity Detection (Silero VAD)
 +-- src/
-¦   +-- App.tsx            # Main application component
-¦   +-- components/        # React UI components
-¦   +-- main.tsx           # Entry point
-¦   +-- types.ts           # TypeScript type definitions
+Â¦   +-- App.tsx            # Main application component
+Â¦   +-- components/        # React UI components
+Â¦   +-- main.tsx           # Entry point
+Â¦   +-- types.ts           # TypeScript type definitions
 +-- index.html             # HTML entry point
 +-- vite.config.ts         # Vite configuration
 +-- wrangler.toml          # Cloudflare Pages configuration
