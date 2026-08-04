@@ -1,6 +1,6 @@
 # Silence Cutter
 
-Browser-native video silence removal. No server, no upload � everything runs client-side.
+Browser-native video silence removal. No server, no upload — everything runs client-side.
 
 ## Tech Stack
 
@@ -17,40 +17,40 @@ Browser-native video silence removal. No server, no upload � everything runs c
 
 ```
 Input Video
-    �
+    ¦
     ?
 +---------------------+
-�  File Ingestion     �  <input> or synthetic demo generator
+¦  File Ingestion     ¦  <input> or synthetic demo generator
 +---------------------+
-          �
+          ¦
           ?
 +---------------------+
-�  Audio Extraction   �  Web Audio API decodeAudioData ? PCM
+¦  Audio Extraction   ¦  Web Audio API decodeAudioData ? PCM
 +---------------------+
-          �
+          ¦
           ?
 +---------------------+
-�  VAD Analysis       �  Silero VAD (ONNX) � speech/non-speech detection
-�  (20ms frames)      �  Hysteresis: prevents jitter at boundaries
+¦  VAD Analysis       ¦  Silero VAD (ONNX) — speech/non-speech detection
+¦  (20ms frames)      ¦  Hysteresis: prevents jitter at boundaries
 +---------------------+
-          �
+          ¦
           ?
 +---------------------+
-�  Timeline Builder   �  VAD frames ? Segments ? EDL
-�  (rules engine)     �  4 rules: min silence, min speech, padding, merge
+¦  Timeline Builder   ¦  VAD frames ? Segments ? EDL
+¦  (rules engine)     ¦  4 rules: min silence, min speech, padding, merge
 +---------------------+
-          �
+          ¦
           ?
 +---------------------+
-�  Interactive Edit   �  Click/drag on waveform to override cuts
-�  (preview player)   �  Seek-loop playback of keep segments
+¦  Interactive Edit   ¦  Click/drag on waveform to override cuts
+¦  (preview player)   ¦  Seek-loop playback of keep segments
 +---------------------+
-          �
+          ¦
           ?
 +---------------------+
-�  Export             �  Download processed audio/video
+¦  Export             ¦  Download processed audio/video
 +---------------------+
-          �
+          ¦
           ?
     Output File
 ```
@@ -109,16 +109,16 @@ wrangler pages deploy dist --project-name=silence-cutter
 
 ```
 +-- core/                  # Core logic (framework-agnostic)
-�   +-- audio/             # Audio processing (extractor, chunker, RMS)
-�   +-- export/            # Export functionality
-�   +-- timeline/          # Timeline builder, EDL, merger
-�   +-- utils/             # Utilities (logger, memory guard, etc.)
-�   +-- vad/               # Voice Activity Detection (Silero VAD)
+¦   +-- audio/             # Audio processing (extractor, chunker, RMS)
+¦   +-- export/            # Export functionality
+¦   +-- timeline/          # Timeline builder, EDL, merger
+¦   +-- utils/             # Utilities (logger, memory guard, etc.)
+¦   +-- vad/               # Voice Activity Detection (Silero VAD)
 +-- src/
-�   +-- App.tsx            # Main application component
-�   +-- components/        # React UI components
-�   +-- main.tsx           # Entry point
-�   +-- types.ts           # TypeScript type definitions
+¦   +-- App.tsx            # Main application component
+¦   +-- components/        # React UI components
+¦   +-- main.tsx           # Entry point
+¦   +-- types.ts           # TypeScript type definitions
 +-- index.html             # HTML entry point
 +-- vite.config.ts         # Vite configuration
 +-- wrangler.toml          # Cloudflare Pages configuration
