@@ -1,77 +1,83 @@
-import type { Segment } from "./timeline-types";
+import { EditEntry, TimelineStats } from './timeline-types';
 
-export interface EditEntry {
-  action: "keep" | "cut";
-  startMs: number;
-  endMs: number;
-  startSample: number;
-  endSample: number;
-}
+export function calculateTimelineStats(entries: EditEntry[], totalMediaDurationMs: number): TimelineStats {
+  let outputDurationMs = 0;
+  let totalCuts = 0;
+  let totalKeeps = 0;
+  let compressedPausesCount = 0;
+  let cutTimeSum = 0;
 
-export interface EDL {
-  entries: EditEntry[];
-  totalDurationMs: number;
-  outputDurationMs: number;
-}
-
-export function generateEDL(
-  segments: Segment[],
-  sampleRate: number = 44100,
-): EDL {
-  const entries: EditEntry[] = segments.map((seg) => ({
-    action: seg.type === "speech" ? "keep" : "cut",
-    startMs: seg.startMs,
-    endMs: seg.endMs,
-    startSample: Math.floor((seg.startMs / 1000) * sampleRate),
-    endSample: Math.floor((seg.endMs / 1000) * sampleRate),
-  }));
-
-  const totalDurationMs =
-    entries.length > 0 ? entries[entries.length - 1].endMs : 0;
-  const outputDurationMs = entries
-    .filter((e) => e.action === "keep")
-    .reduce((sum, e) => sum + (e.endMs - e.startMs), 0);
-
-  return { entries, totalDurationMs, outputDurationMs };
-}
-
-export function validateEDL(edl: EDL): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-  const { entries } = edl;
-
-  if (entries.length === 0) {
-    return { valid: true, errors: [] };
-  }
-
-  // Check for gaps
-  for (let i = 1; i < entries.length; i++) {
-    const prev = entries[i - 1];
-    const curr = entries[i];
-    if (curr.startMs !== prev.endMs) {
-      errors.push(
-        `Gap or overlap between entries ${i - 1} and ${i}: ${prev.endMs}ms → ${curr.startMs}ms`,
-      );
+  entries.forEach((entry) => {
+    if (entry.action === 'keep') {
+      outputDurationMs += entry.durationMs;
+      totalKeeps++;
+      if (entry.isCompressedPause) {
+        compressedPausesCount++;
+      }
+    } else {
+      totalCuts++;
+      cutTimeSum += entry.durationMs;
     }
-  }
+  });
 
-  // Check for overlaps
-  for (let i = 1; i < entries.length; i++) {
-    const prev = entries[i - 1];
-    const curr = entries[i];
-    if (curr.startMs < prev.endMs) {
-      errors.push(`Overlap between entries ${i - 1} and ${i}`);
-    }
-  }
+  const timeSavedMs = Math.max(0, totalMediaDurationMs - outputDurationMs);
+  const timeSavedPercent = totalMediaDurationMs > 0 ? (timeSavedMs / totalMediaDurationMs) * 100 : 0;
+  const averageCutDurationMs = totalCuts > 0 ? cutTimeSum / totalCuts : 0;
 
-  return { valid: errors.length === 0, errors };
+  return {
+    originalDurationMs: totalMediaDurationMs,
+    outputDurationMs,
+    timeSavedMs,
+    timeSavedPercent,
+    totalCuts,
+    totalKeeps,
+    compressedPausesCount,
+    averageCutDurationMs,
+  };
 }
 
-export function getTimeSaved(edl: EDL): {
-  timeSavedMs: number;
-  percentageRemoved: number;
-} {
-  const timeSavedMs = edl.totalDurationMs - edl.outputDurationMs;
-  const percentageRemoved =
-    edl.totalDurationMs > 0 ? (timeSavedMs / edl.totalDurationMs) * 100 : 0;
-  return { timeSavedMs, percentageRemoved };
+export function exportEDLToJson(entries: EditEntry[], originalFilename: string, durationMs: number): string {
+  const edlData = {
+    version: '1.0',
+    app: 'SilenceCutter',
+    exportedAt: new Date().toISOString(),
+    sourceFile: originalFilename,
+    durationMs,
+    edl: entries.map((e) => ({
+      id: e.id,
+      action: e.action,
+      startMs: Math.round(e.startMs),
+      endMs: Math.round(e.endMs),
+      durationMs: Math.round(e.durationMs),
+      isCompressedPause: !!e.isCompressedPause,
+    })),
+  };
+  return JSON.stringify(edlData, null, 2);
+}
+
+export function generateFFmpegCliScript(entries: EditEntry[], inputFilename = 'input.mp4', outputFilename = 'silence_removed.mp4'): string {
+  const keeps = entries.filter((e) => e.action === 'keep');
+  if (keeps.length === 0) {
+    return '# No keep segments found in EDL';
+  }
+
+  let script = `#!/bin/bash\n# SilenceCutter FFmpeg Stream-Copy Script for ${inputFilename}\n# Run this in your terminal where ${inputFilename} is located\n\n`;
+
+  // Filter complex command
+  const selectParts: string[] = [];
+  const aselectParts: string[] = [];
+
+  keeps.forEach((k) => {
+    const startSec = (k.startMs / 1000).toFixed(3);
+    const endSec = (k.endMs / 1000).toFixed(3);
+    selectParts.push(`between(t,${startSec},${endSec})`);
+    aselectParts.push(`between(t,${startSec},${endSec})`);
+  });
+
+  const videoFilter = `select='${selectParts.join('+')}',setpts=N/FRAME_RATE/TB`;
+  const audioFilter = `aselect='${aselectParts.join('+')}',asetpts=N/SR/TB`;
+
+  script += `ffmpeg -i "${inputFilename}" -vf "${videoFilter}" -af "${audioFilter}" "${outputFilename}"\n`;
+
+  return script;
 }

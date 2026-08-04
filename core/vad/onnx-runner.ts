@@ -1,151 +1,103 @@
-/**
- * ONNX Runtime wrapper for Silero VAD inference.
- * Handles model loading, inference, and error recovery.
- */
+import { logger } from '../utils/logger';
 
-import * as ort from "onnxruntime-web";
-import type { LSTMState, VADInferenceResult } from "./vad-types";
-import { createLogger } from "../utils/logger";
-
-const logger = createLogger("onnx-runner");
-
-export interface ONNXRunnerOptions {
-  /** Path to the ONNX model file */
-  modelUrl: string;
-  /** Execution provider (default: 'wasm') */
-  executionProvider?: "wasm" | "webgl" | "cpu";
+export interface InferenceSessionOptions {
+  modelPath?: string;
 }
 
-const LSTM_SIZE = 128;
+export class SileroOnnxRunner {
+  private session: unknown = null;
+  private isLoaded = false;
+  private hState: Float32Array = new Float32Array(2 * 1 * 64); // 2 layers, 1 batch, 64 dimension
+  private cState: Float32Array = new Float32Array(2 * 1 * 64);
 
-/**
- * Create initial LSTM state (zeros).
- * @returns Initial LSTM state with zeroed h and c tensors
- */
-export function createInitialLSTMState(): LSTMState {
-  return {
-    h: new Float32Array(LSTM_SIZE),
-    c: new Float32Array(LSTM_SIZE),
-  };
-}
-
-/**
- * ONNX Runtime runner for Silero VAD model.
- */
-export class ONNXRunner {
-  private session: ort.InferenceSession | null = null;
-  private readonly modelUrl: string;
-  private readonly executionProvider: string;
-
-  constructor(options: ONNXRunnerOptions) {
-    this.modelUrl = options.modelUrl;
-    this.executionProvider = options.executionProvider ?? "wasm";
+  constructor() {
+    this.resetState();
   }
 
-  /**
-   * Load the ONNX model.
-   */
-  async initialize(): Promise<void> {
+  public resetState() {
+    this.hState.fill(0);
+    this.cState.fill(0);
+  }
+
+  public async loadModel(modelUrl = '/models/silero_vad.onnx'): Promise<boolean> {
     try {
-      logger.info(`Loading ONNX model from ${this.modelUrl}`);
-
-      ort.env.wasm.numThreads = navigator.hardwareConcurrency || 4;
-
-      this.session = await ort.InferenceSession.create(this.modelUrl, {
-        executionProviders: [this.executionProvider],
+      const ort = await import('onnxruntime-web');
+      // Set WASM paths if needed
+      ort.env.wasm.numThreads = Math.min(4, typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 2 : 2);
+      
+      this.session = await ort.InferenceSession.create(modelUrl, {
+        executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all',
       });
-
-      logger.info("ONNX model loaded successfully");
-    } catch (error) {
-      logger.error("Failed to load ONNX model", error);
-      throw error;
+      this.isLoaded = true;
+      logger.info('SileroOnnxRunner', 'Silero VAD ONNX model loaded successfully');
+      return true;
+    } catch (err) {
+      logger.warn('SileroOnnxRunner', 'ONNX model load failed, falling back to hybrid DSP VAD', err);
+      this.isLoaded = false;
+      return false;
     }
   }
 
-  /**
-   * Run inference on a single audio window.
-   * @param audioData - Float32Array of 512 samples (32ms at 16kHz)
-   * @param state - Previous LSTM state
-   * @returns Inference result with speech probability and new LSTM state
-   */
-  async infer(
-    audioData: Float32Array,
-    state: LSTMState,
-  ): Promise<VADInferenceResult> {
-    if (!this.session) {
-      throw new Error("ONNX session not initialized. Call initialize() first.");
+  public isReady(): boolean {
+    return this.isLoaded;
+  }
+
+  public async runInference(pcm512: Float32Array, sampleRate = 16000): Promise<number> {
+    if (!this.isLoaded || !this.session) {
+      // Fallback: calculate high-precision RMS & zero-crossing energy
+      return this.dspFallbackProbability(pcm512, sampleRate);
     }
 
-    // Ensure correct input size
-    const input =
-      audioData.length === 512 ? audioData : audioData.slice(0, 512);
-
-    // Create input tensor [1, 512]
-    const inputTensor = new ort.Tensor("float32", input, [1, 512]);
-
-    // Create state tensors [1, 1, 128]
-    const hTensor = new ort.Tensor("float32", state.h, [1, 1, LSTM_SIZE]);
-    const cTensor = new ort.Tensor("float32", state.c, [1, 1, LSTM_SIZE]);
-
-    // Create sr tensor (sample rate)
-    const srTensor = new ort.Tensor("int64", BigInt(16000), [1]);
-
     try {
-      const results = await this.session.run({
+      const ort = await import('onnxruntime-web');
+      const inputTensor = new ort.Tensor('float32', pcm512, [1, 512]);
+      const srTensor = new ort.Tensor('int64', BigInt64Array.from([BigInt(sampleRate)]), [1]);
+      const hTensor = new ort.Tensor('float32', this.hState, [2, 1, 64]);
+      const cTensor = new ort.Tensor('float32', this.cState, [2, 1, 64]);
+
+      const feeds = {
         input: inputTensor,
+        sr: srTensor,
         h: hTensor,
         c: cTensor,
-        sr: srTensor,
-      });
-
-      // Extract outputs
-      const outputTensor = results.output;
-      const hOutput = results.hn;
-      const cOutput = results.cn;
-
-      const speechProb = (outputTensor.data as Float32Array)[0];
-      const newH = new Float32Array(hOutput.data as Float32Array);
-      const newC = new Float32Array(cOutput.data as Float32Array);
-
-      return {
-        speechProb,
-        h: newH,
-        c: newC,
       };
-    } catch (error) {
-      logger.error("ONNX inference failed", error);
-      throw error;
+
+      const results = await (this.session as { run: (feeds: unknown) => Promise<Record<string, { data: Float32Array }>> }).run(feeds);
+      
+      const output = results.output?.data[0] ?? 0;
+      if (results.hn && results.cn) {
+        this.hState.set(results.hn.data);
+        this.cState.set(results.cn.data);
+      }
+      return output;
+    } catch (err) {
+      logger.error('SileroOnnxRunner', 'ONNX inference error, switching to fallback DSP', err);
+      return this.dspFallbackProbability(pcm512, sampleRate);
     }
   }
 
-  /**
-   * Reset the ONNX session (for crash recovery).
-   */
-  async reset(): Promise<void> {
-    this.session = null;
-    await this.initialize();
-  }
+  private dspFallbackProbability(pcm: Float32Array, sampleRate: number): number {
+    let sumSq = 0;
+    let zcrCount = 0;
+    for (let i = 0; i < pcm.length; i++) {
+      const val = pcm[i] || 0;
+      sumSq += val * val;
+      if (i > 0 && ((pcm[i]! >= 0 && pcm[i - 1]! < 0) || (pcm[i]! < 0 && pcm[i - 1]! >= 0))) {
+        zcrCount++;
+      }
+    }
+    const rms = Math.sqrt(sumSq / pcm.length);
+    const zcr = zcrCount / pcm.length;
 
-  /**
-   * Check if the model is loaded.
-   */
-  isReady(): boolean {
-    return this.session !== null;
+    // Normalised speech probability scoring
+    const db = 20 * Math.log10(Math.max(rms, 1e-5));
+    // Typical voice speech is above -40dB up to 0dB, noise floor -55dB
+    let prob = (db + 48) / 30; // -48dB gives 0, -18dB gives 1.0
+    if (zcr > 0.4) {
+      // High frequency noise / hiss adjustment
+      prob *= 0.8;
+    }
+    return Math.min(1.0, Math.max(0.0, prob));
   }
-
-  /**
-   * Release resources.
-   */
-  dispose(): void {
-    this.session = null;
-  }
-}
-
-/**
- * Create an ONNX runner instance.
- * @param options - Configuration options
- * @returns ONNXRunner instance
- */
-export function createONNXRunner(options: ONNXRunnerOptions): ONNXRunner {
-  return new ONNXRunner(options);
 }

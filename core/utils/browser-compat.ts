@@ -1,184 +1,61 @@
-/**
- * Browser compatibility detection module.
- * Detects runtime and available capabilities for graceful degradation.
- */
-
-export type BrowserRuntime = "chromium" | "firefox" | "safari" | "unknown";
-
 export interface BrowserCapabilities {
-  /** Browser runtime detection */
-  runtime: BrowserRuntime;
-  /** File System Access API support (Chromium only) */
-  fileSystemAccess: boolean;
-  /** Origin Private File System support */
-  opfs: boolean;
-  /** SharedArrayBuffer support (requires COOP/COEP headers) */
   sharedArrayBuffer: boolean;
-  /** WebCodecs API support */
   webCodecs: boolean;
-  /** WASM SIMD support */
+  fileSystemAccess: boolean;
+  opfs: boolean;
   wasmSimd: boolean;
-  /** OffscreenCanvas support */
+  webAudio: boolean;
+  crossOriginIsolated: boolean;
   offscreenCanvas: boolean;
-  /** Web Workers support */
-  webWorkers: boolean;
+  estimatedMemoryMB: number;
+  browserName: 'Chromium' | 'Firefox' | 'Safari' | 'Unknown';
 }
 
-/**
- * Detect the browser runtime based on user agent and feature detection.
- * @returns Detected browser runtime
- */
-export function detectRuntime(): BrowserRuntime {
-  if (typeof navigator === "undefined") {
-    return "unknown";
+export function detectBrowserCapabilities(): BrowserCapabilities {
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  let browserName: BrowserCapabilities['browserName'] = 'Unknown';
+  if (userAgent.includes('Firefox')) {
+    browserName = 'Firefox';
+  } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+    browserName = 'Safari';
+  } else if (userAgent.includes('Chrome') || userAgent.includes('Chromium')) {
+    browserName = 'Chromium';
   }
 
-  const userAgent = navigator.userAgent.toLowerCase();
+  const sharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
+  const webCodecs = typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoDecoder' in window;
+  const fileSystemAccess = typeof window !== 'undefined' && 'showOpenFilePicker' in window;
+  const opfs = typeof navigator !== 'undefined' && !!navigator.storage && 'getDirectory' in navigator.storage;
+  const webAudio = typeof window !== 'undefined' && ('AudioContext' in window || 'webkitAudioContext' in window);
+  const crossOriginIsolated = typeof window !== 'undefined' ? (window.crossOriginIsolated ?? false) : false;
+  const offscreenCanvas = typeof OffscreenCanvas !== 'undefined';
 
-  // Check for Safari first (must be before Chrome check since Safari includes Chrome in UA)
-  if (userAgent.includes("safari") && !userAgent.includes("chrome")) {
-    return "safari";
-  }
-
-  // Check for Firefox
-  if (userAgent.includes("firefox")) {
-    return "firefox";
-  }
-
-  // Check for Chrome/Chromium (includes Edge, Opera, etc.)
-  if (userAgent.includes("chrome")) {
-    return "chromium";
-  }
-
-  return "unknown";
-}
-
-/**
- * Check if File System Access API is available.
- * @returns True if File System Access API is supported
- */
-export function checkFileSystemAccess(): boolean {
-  return typeof window !== "undefined" && "showOpenFilePicker" in window;
-}
-
-/**
- * Check if Origin Private File System is available.
- * @returns True if OPFS is supported
- */
-export function checkOPFS(): boolean {
-  return (
-    typeof navigator !== "undefined" &&
-    "storage" in navigator &&
-    "getDirectory" in navigator.storage
-  );
-}
-
-/**
- * Check if SharedArrayBuffer is available.
- * Requires COOP/COEP headers to be set.
- * @returns True if SharedArrayBuffer is available
- */
-export function checkSharedArrayBuffer(): boolean {
-  return (
-    typeof SharedArrayBuffer !== "undefined" &&
-    globalThis.crossOriginIsolated === true
-  );
-}
-
-/**
- * Check if WebCodecs API is available.
- * @returns True if WebCodecs is supported
- */
-export function checkWebCodecs(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    "VideoDecoder" in window &&
-    "VideoEncoder" in window
-  );
-}
-
-/**
- * Check if WASM SIMD is supported.
- * @returns True if WASM SIMD is supported
- */
-export function checkWasmSimd(): boolean {
+  // WASM SIMD detection check
+  let wasmSimd = false;
   try {
-    if (typeof WebAssembly === "undefined") {
-      return false;
-    }
-    // Test SIMD support by trying to compile a SIMD instruction
-    const bytes = new Uint8Array([
-      0, 97, 115, 109, 1, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0,
-    ]);
-    return (
-      WebAssembly.compile(bytes).then(
-        () => true,
-        () => false,
-      ) instanceof Promise
+    wasmSimd = WebAssembly.validate(
+      new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 26, 11])
     );
   } catch {
-    return false;
+    wasmSimd = false;
   }
-}
 
-/**
- * Check if OffscreenCanvas is available.
- * @returns True if OffscreenCanvas is supported
- */
-export function checkOffscreenCanvas(): boolean {
-  return typeof OffscreenCanvas !== "undefined";
-}
+  // Device memory estimation
+  let estimatedMemoryMB = 4096;
+  if (typeof navigator !== 'undefined' && 'deviceMemory' in navigator) {
+    estimatedMemoryMB = (navigator as unknown as { deviceMemory: number }).deviceMemory * 1024;
+  }
 
-/**
- * Check if Web Workers are available.
- * @returns True if Web Workers are supported
- */
-export function checkWebWorkers(): boolean {
-  return typeof Worker !== "undefined";
-}
-
-/**
- * Get all browser capabilities.
- * @returns Object containing all detected capabilities
- */
-export function getCapabilities(): BrowserCapabilities {
   return {
-    runtime: detectRuntime(),
-    fileSystemAccess: checkFileSystemAccess(),
-    opfs: checkOPFS(),
-    sharedArrayBuffer: checkSharedArrayBuffer(),
-    webCodecs: checkWebCodecs(),
-    wasmSimd: checkWasmSimd(),
-    offscreenCanvas: checkOffscreenCanvas(),
-    webWorkers: checkWebWorkers(),
+    sharedArrayBuffer,
+    webCodecs,
+    fileSystemAccess,
+    opfs,
+    wasmSimd,
+    webAudio,
+    crossOriginIsolated,
+    offscreenCanvas,
+    estimatedMemoryMB,
+    browserName,
   };
-}
-
-/**
- * Check if a specific capability is supported.
- * @param capability - The capability to check
- * @returns True if the capability is supported
- */
-export function isSupported(capability: keyof BrowserCapabilities): boolean {
-  const capabilities = getCapabilities();
-  return capabilities[capability] as boolean;
-}
-
-/**
- * Get a human-readable summary of browser capabilities.
- * @returns Formatted string with capability status
- */
-export function getCapabilitySummary(): string {
-  const caps = getCapabilities();
-  const lines: string[] = [
-    `Runtime: ${caps.runtime}`,
-    `File System Access: ${caps.fileSystemAccess ? "✓" : "✗"}`,
-    `OPFS: ${caps.opfs ? "✓" : "✗"}`,
-    `SharedArrayBuffer: ${caps.sharedArrayBuffer ? "✓" : "✗"}`,
-    `WebCodecs: ${caps.webCodecs ? "✓" : "✗"}`,
-    `WASM SIMD: ${caps.wasmSimd ? "✓" : "✗"}`,
-    `OffscreenCanvas: ${caps.offscreenCanvas ? "✓" : "✗"}`,
-    `Web Workers: ${caps.webWorkers ? "✓" : "✗"}`,
-  ];
-  return lines.join("\n");
 }
