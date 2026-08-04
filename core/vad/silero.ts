@@ -1,188 +1,154 @@
-/**
- * Silero VAD wrapper for voice activity detection.
- * Processes audio chunks and emits VAD frames with hysteresis.
- */
+import { DEFAULT_VAD_CONFIG, VADConfig, VADFrame } from './vad-types';
+import { SileroOnnxRunner } from './onnx-runner';
+import { logger } from '../utils/logger';
 
-import type { VADFrame, VADOptions, LSTMState } from "./vad-types";
-import { DEFAULT_VAD_OPTIONS } from "./vad-types";
-import { createLogger } from "../utils/logger";
+export class SileroVADEngine {
+  private config: VADConfig;
+  private runner: SileroOnnxRunner;
+  private estimatedNoiseFloorDb = -50;
 
-const _logger = createLogger("silero-vad");
+  constructor(config: Partial<VADConfig> = {}) {
+    this.config = { ...DEFAULT_VAD_CONFIG, ...config };
+    this.runner = new SileroOnnxRunner();
+  }
 
-/**
- * Hysteresis state tracker for VAD.
- */
-class HysteresisTracker {
-  private isCurrentlySpeech = false;
-  private consecutiveNonSpeechFrames = 0;
-  private readonly speechThreshold: number;
-  private readonly nonSpeechThreshold: number;
-  private readonly minNonSpeechFrames: number;
+  public async init(modelUrl?: string): Promise<boolean> {
+    return await this.runner.loadModel(modelUrl);
+  }
 
-  constructor(options: Required<VADOptions>) {
-    this.speechThreshold = options.speechThreshold;
-    this.nonSpeechThreshold = options.nonSpeechThreshold;
-    this.minNonSpeechFrames = options.minNonSpeechFrames;
+  public setConfig(newConfig: Partial<VADConfig>) {
+    this.config = { ...this.config, ...newConfig };
+  }
+
+  public getConfig(): VADConfig {
+    return { ...this.config };
+  }
+
+  public getEstimatedNoiseFloorDb(): number {
+    return this.estimatedNoiseFloorDb;
   }
 
   /**
-   * Process a speech probability and return the speech state.
-   * @param speechProb - Speech probability (0-1)
-   * @returns True if speech is detected
+   * Process full PCM audio buffer at 16kHz and emit array of VAD frames (32ms windows).
    */
-  process(speechProb: number): boolean {
-    if (!this.isCurrentlySpeech) {
-      // Non-speech → Speech: require probability > speechThreshold
-      if (speechProb > this.speechThreshold) {
-        this.isCurrentlySpeech = true;
-        this.consecutiveNonSpeechFrames = 0;
+  public async processAudio(
+    pcmData: Float32Array,
+    sampleRate = 16000,
+    onProgress?: (percent: number, currentFrames: VADFrame[]) => void
+  ): Promise<VADFrame[]> {
+    logger.info('SileroVADEngine', `Starting VAD processing on ${pcmData.length} samples (${(pcmData.length / sampleRate).toFixed(1)}s)`);
+
+    // First pass: adaptive noise floor estimation on first 60 seconds (or full audio if shorter)
+    this.estimateNoiseFloor(pcmData, sampleRate);
+
+    const windowSize = this.config.windowSizeSamples; // 512
+    const totalWindows = Math.floor(pcmData.length / windowSize);
+    const frames: VADFrame[] = [];
+
+    this.runner.resetState();
+
+    let consecutiveSpeechCount = 0;
+    let consecutiveSilenceCount = 0;
+    let isCurrentlySpeech = false;
+
+    for (let i = 0; i < totalWindows; i++) {
+      const offset = i * windowSize;
+      const windowPcm = pcmData.subarray(offset, offset + windowSize);
+
+      let speechProb = await this.runner.runInference(windowPcm, sampleRate);
+
+      // Apply adaptive noise floor adjustment
+      if (this.config.adaptiveNoiseFloor) {
+        speechProb = this.adjustProbWithNoiseFloor(windowPcm, speechProb);
       }
-    } else {
-      // Speech → Non-speech: require probability < nonSpeechThreshold for N frames
-      if (speechProb < this.nonSpeechThreshold) {
-        this.consecutiveNonSpeechFrames++;
-        if (this.consecutiveNonSpeechFrames >= this.minNonSpeechFrames) {
-          this.isCurrentlySpeech = false;
-          this.consecutiveNonSpeechFrames = 0;
+
+      // Hysteresis logic
+      if (isCurrentlySpeech) {
+        if (speechProb < this.config.silenceThreshold) {
+          consecutiveSilenceCount++;
+          if (consecutiveSilenceCount >= this.config.minSilenceDurationFrames) {
+            isCurrentlySpeech = false;
+            consecutiveSpeechCount = 0;
+          }
+        } else {
+          consecutiveSilenceCount = 0;
         }
       } else {
-        this.consecutiveNonSpeechFrames = 0;
+        if (speechProb > this.config.speechThreshold) {
+          consecutiveSpeechCount++;
+          if (consecutiveSpeechCount >= this.config.minSpeechDurationFrames) {
+            isCurrentlySpeech = true;
+            consecutiveSilenceCount = 0;
+          }
+        } else {
+          consecutiveSpeechCount = 0;
+        }
+      }
+
+      const startMs = (offset / sampleRate) * 1000;
+      const endMs = ((offset + windowSize) / sampleRate) * 1000;
+
+      frames.push({
+        frameIndex: i,
+        startMs,
+        endMs,
+        speechProb,
+        isSpeech: isCurrentlySpeech,
+      });
+
+      if (onProgress && i % 250 === 0) {
+        onProgress(Math.round((i / totalWindows) * 100), frames);
       }
     }
 
-    return this.isCurrentlySpeech;
-  }
-
-  /**
-   * Get the current speech state.
-   */
-  getCurrentState(): boolean {
-    return this.isCurrentlySpeech;
-  }
-
-  /**
-   * Reset the tracker state.
-   */
-  reset(): void {
-    this.isCurrentlySpeech = false;
-    this.consecutiveNonSpeechFrames = 0;
-  }
-}
-
-/**
- * Silero VAD processor with hysteresis.
- * Processes PCM audio chunks and emits VAD frames.
- */
-export class SileroVAD {
-  private readonly options: Required<VADOptions>;
-  private hysteresis: HysteresisTracker;
-  private lstmState: LSTMState;
-  private readonly framesPerChunk: number;
-
-  constructor(options: VADOptions = {}) {
-    this.options = { ...DEFAULT_VAD_OPTIONS, ...options };
-    this.hysteresis = new HysteresisTracker(this.options);
-    this.lstmState = {
-      h: new Float32Array(128),
-      c: new Float32Array(128),
-    };
-    this.framesPerChunk = Math.floor(this.options.windowSize / 320); // 320 samples = 20ms at 16kHz
-  }
-
-  /**
-   * Process a chunk of PCM audio and return VAD frames.
-   * @param pcmData - Float32Array of PCM samples
-   * @param inferFn - Function to run ONNX inference
-   * @returns Array of VAD frames
-   */
-  async processChunk(
-    pcmData: Float32Array,
-    inferFn: (
-      input: Float32Array,
-      state: LSTMState,
-    ) => Promise<{ speechProb: number; h: Float32Array; c: Float32Array }>,
-  ): Promise<VADFrame[]> {
-    const frames: VADFrame[] = [];
-    const samplesPerFrame = 512; // 32ms at 16kHz
-    const frameDurationMs = (samplesPerFrame / this.options.sampleRate) * 1000;
-
-    // Process in 512-sample windows
-    for (
-      let offset = 0;
-      offset + samplesPerFrame <= pcmData.length;
-      offset += samplesPerFrame
-    ) {
-      const window = pcmData.slice(offset, offset + samplesPerFrame);
-      const startMs = (offset / this.options.sampleRate) * 1000;
-      const endMs = startMs + frameDurationMs;
-
-      // Run inference
-      const result = await inferFn(window, this.lstmState);
-
-      // Update LSTM state (deep copy to avoid mutation)
-      this.lstmState = {
-        h: new Float32Array(result.h),
-        c: new Float32Array(result.c),
-      };
-
-      // Apply hysteresis
-      const isSpeech = this.hysteresis.process(result.speechProb);
-
-      frames.push({
-        startMs,
-        endMs,
-        speechProb: result.speechProb,
-        isSpeech,
-      });
+    if (onProgress) {
+      onProgress(100, frames);
     }
 
+    logger.info('SileroVADEngine', `Finished VAD processing: generated ${frames.length} frames`);
     return frames;
   }
 
-  /**
-   * Get the current LSTM state.
-   */
-  getLSTMState(): LSTMState {
-    return {
-      h: new Float32Array(this.lstmState.h),
-      c: new Float32Array(this.lstmState.c),
-    };
+  private estimateNoiseFloor(pcmData: Float32Array, sampleRate: number) {
+    const checkSamples = Math.min(pcmData.length, sampleRate * 60);
+    const frameSize = 512;
+    const rmsValues: number[] = [];
+
+    for (let i = 0; i < checkSamples; i += frameSize) {
+      let sumSq = 0;
+      const end = Math.min(i + frameSize, checkSamples);
+      for (let j = i; j < end; j++) {
+        const val = pcmData[j] || 0;
+        sumSq += val * val;
+      }
+      const rms = Math.sqrt(sumSq / (end - i));
+      if (rms > 0) {
+        rmsValues.push(20 * Math.log10(rms));
+      }
+    }
+
+    if (rmsValues.length > 0) {
+      rmsValues.sort((a, b) => a - b);
+      // Take the 15th percentile as noise floor estimation
+      const idx = Math.floor(rmsValues.length * 0.15);
+      this.estimatedNoiseFloorDb = rmsValues[idx] ?? -50;
+      logger.info('SileroVADEngine', `Estimated noise floor: ${this.estimatedNoiseFloorDb.toFixed(1)} dB`);
+    }
   }
 
-  /**
-   * Set the LSTM state.
-   */
-  setLSTMState(state: LSTMState): void {
-    this.lstmState = {
-      h: new Float32Array(state.h),
-      c: new Float32Array(state.c),
-    };
-  }
+  private adjustProbWithNoiseFloor(windowPcm: Float32Array, rawProb: number): number {
+    let sumSq = 0;
+    for (let i = 0; i < windowPcm.length; i++) {
+      const val = windowPcm[i] || 0;
+      sumSq += val * val;
+    }
+    const rms = Math.sqrt(sumSq / windowPcm.length);
+    const db = 20 * Math.log10(Math.max(rms, 1e-5));
 
-  /**
-   * Reset the VAD state.
-   */
-  reset(): void {
-    this.hysteresis.reset();
-    this.lstmState = {
-      h: new Float32Array(128),
-      c: new Float32Array(128),
-    };
+    // If signal is below noise floor + 4dB, suppress speech prob
+    if (db < this.estimatedNoiseFloorDb + 4) {
+      return rawProb * 0.2;
+    }
+    return rawProb;
   }
-
-  /**
-   * Get VAD options.
-   */
-  getOptions(): Required<VADOptions> {
-    return { ...this.options };
-  }
-}
-
-/**
- * Create a Silero VAD instance.
- * @param options - VAD configuration
- * @returns SileroVAD instance
- */
-export function createSileroVAD(options?: VADOptions): SileroVAD {
-  return new SileroVAD(options);
 }

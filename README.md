@@ -1,123 +1,141 @@
-# Web Media Engine
+# Silence Cutter
 
-Browser-native video silence removal. No server, no upload — everything runs client-side.
-
-**Core principle:** `core/` has zero dependency on Vue, Nuxt, or any UI framework. Workers import from `core/`. Vue imports only from `composables/` and `stores/`.
+Browser-native video silence removal. No server, no upload � everything runs client-side.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Framework | Nuxt 3 (SSG, `ssr: false`) |
-| UI | Vue 3 + shadcn-vue + Tailwind CSS |
-| State | Pinia |
-| Audio Extraction | ffmpeg.wasm |
+| Framework | React 19 + Vite |
+| UI | Tailwind CSS v4 + Motion |
+| State | React hooks (useState/useMemo) |
 | Voice Detection | Silero VAD (ONNX Runtime Web) |
-| Workers | Web Workers (pooled, typed message contracts) |
-| Rendering | Canvas / WebGL / OffscreenCanvas |
+| Audio Extraction | Web Audio API |
+| AI Integration | Gemini API (optional) |
 | Deploy | Cloudflare Pages |
-| Browsers | Chrome, Firefox, Safari |
 
 ## Processing Pipeline
 
 ```
-Input Video (up to 10GB)
-    │
-    ▼
-┌─────────────────────┐
-│  File Ingestion     │  File System Access API / <input> fallback
-│  (streaming chunks) │  Never loads full file into RAM
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│  Audio Extraction   │  ffmpeg.wasm → PCM 16kHz mono
-│  (ffmpeg.wasm)      │  Lazy-loaded, cached in IndexedDB
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│  VAD Analysis       │  Silero VAD (ONNX) in N parallel workers
-│  (20ms frames)      │  Hysteresis: speech/non-speech with confidence
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│  Timeline Builder   │  VAD frames → Segments → EDL
-│  (rules engine)     │  5 pure rules: filter, compress, pad, merge
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│  Interactive Edit   │  Click/drag on waveform to override cuts
-│  (preview player)   │  Seek-loop playback of keep segments
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│  Hybrid Export      │  Stream-copy where keyframes align
-│  (ffmpeg.wasm)      │  Re-encode only affected GOP at cut boundaries
-└─────────┬───────────┘
-          │
-          ▼
-    Output Video (.mp4)
+Input Video
+    �
+    ?
++---------------------+
+�  File Ingestion     �  <input> or synthetic demo generator
++---------------------+
+          �
+          ?
++---------------------+
+�  Audio Extraction   �  Web Audio API decodeAudioData ? PCM
++---------------------+
+          �
+          ?
++---------------------+
+�  VAD Analysis       �  Silero VAD (ONNX) � speech/non-speech detection
+�  (20ms frames)      �  Hysteresis: prevents jitter at boundaries
++---------------------+
+          �
+          ?
++---------------------+
+�  Timeline Builder   �  VAD frames ? Segments ? EDL
+�  (rules engine)     �  4 rules: min silence, min speech, padding, merge
++---------------------+
+          �
+          ?
++---------------------+
+�  Interactive Edit   �  Click/drag on waveform to override cuts
+�  (preview player)   �  Seek-loop playback of keep segments
++---------------------+
+          �
+          ?
++---------------------+
+�  Export             �  Download processed audio/video
++---------------------+
+          �
+          ?
+    Output File
 ```
-
-## Algorithms
-
-### Silence Detection (Silero VAD)
-
-Silero VAD processes 512-sample windows (32ms at 16kHz). Each frame outputs `speechProb ∈ [0,1]`.
-
-**Hysteresis logic:**
-- Speech → Non-speech: requires `speechProb < 0.35` for 3+ consecutive frames
-- Non-speech → Speech: requires `speechProb > 0.75` for 1 frame
-
-This prevents jitter at speech boundaries.
-
-**Parallel processing:**
-Audio is split into N segments (N = `hardwareConcurrency - 2`). Each segment overlaps by 500ms with neighbors. Overlap regions are discarded from the later segment after VAD, preventing boundary artifacts.
-
-### Timeline Rules Engine
-
-5 pure functions applied sequentially to `Segment[]`:
-
-1. **Min silence filter** — discard silence < `minSilenceMs` (600ms default)
-2. **Min speech filter** — discard speech < `minSpeechMs` (100ms default, clicks/pops)
-3. **Pause compression** — shorten medium silences (600-1200ms) to `targetPauseDuration` (250ms)
-4. **Context padding** — expand speech segments by `paddingMs` (150ms) each side
-5. **Merge nearby** — join speech segments closer than `mergeGapMs` (300ms)
-
-### Hybrid Export Strategy
-
-For each `keep` segment in the EDL:
-1. Probe keyframes with `ffprobe`
-2. If segment start/end aligns with keyframes → **stream copy** (no quality loss)
-3. If segment start/end falls mid-GOP → **re-encode only that GOP**, then trim
-
-Output is concatenated with FFmpeg concat demuxer. Result: near-lossless quality with minimal re-encoding.
-
-## Performance Budget
-
-| Metric | Target |
-|--------|--------|
-| Cold load (10 Mbps) | < 3s |
-| Warm load (cached) | < 1s |
-| VAD 1hr audio (8-core) | < 4min |
-| Export 1hr (copy-heavy) | < 5min |
-| Export 1hr (re-encode) | < 20min |
-| Waveform FPS | ≥ 60fps |
-| EDL recompute | < 50ms |
-| Peak RAM (2GB export) | < 600MB |
 
 ## Development
 
+### Prerequisites
+
+- Bun (recommended) or Node.js
+
+### Setup
+
 ```bash
-npm install
-npm run dev          # Start dev server
-npm run build        # Static build
-npm run test:unit    # Unit tests (Vitest)
-npm run test:e2e     # E2E tests (Playwright)
-npm run lint         # ESLint
-npm run typecheck    # TypeScript check
+# Install dependencies
+bun install
+
+# Start dev server
+bun run dev
+
+# Build for production
+bun run build
+
+# Preview production build
+bun run preview
+
+# Type check
+bun run typecheck
 ```
+
+### Environment Variables
+
+Copy .env.example to .env.local and set your Gemini API key (optional):
+
+```bash
+GEMINI_API_KEY=your_api_key_here
+```
+
+## Deploy to Cloudflare Pages
+
+### Via Wrangler CLI
+
+```bash
+# Install Wrangler
+npm install -g wrangler
+
+# Login to Cloudflare
+wrangler login
+
+# Build and deploy
+bun run build
+wrangler pages deploy dist --project-name=silence-cutter
+```
+
+### Via GitHub Integration
+
+1. Push to GitHub
+2. Go to Cloudflare Dashboard ? Pages
+3. Connect your repository
+4. Set build command: bun run build
+5. Set build output directory: dist
+6. Deploy
+
+## Project Structure
+
+```
++-- core/                  # Core logic (framework-agnostic)
+�   +-- audio/             # Audio processing (extractor, chunker, RMS)
+�   +-- export/            # Export functionality
+�   +-- timeline/          # Timeline builder, EDL, merger
+�   +-- utils/             # Utilities (logger, memory guard, etc.)
+�   +-- vad/               # Voice Activity Detection (Silero VAD)
++-- src/
+�   +-- App.tsx            # Main application component
+�   +-- components/        # React UI components
+�   +-- main.tsx           # Entry point
+�   +-- types.ts           # TypeScript type definitions
++-- index.html             # HTML entry point
++-- vite.config.ts         # Vite configuration
++-- wrangler.toml          # Cloudflare Pages configuration
++-- package.json
+```
+
+## Browsers
+
+- Chrome / Edge
+- Firefox
+- Safari

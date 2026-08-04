@@ -1,77 +1,65 @@
-import type { VADFrame } from "../vad/vad-types";
+export type SegmentType = 'speech' | 'silence';
 
 export interface Segment {
   id: string;
-  type: "speech" | "silence";
+  type: SegmentType;
   startMs: number;
   endMs: number;
   avgSpeechProb: number;
 }
 
-export interface RuleConfig {
-  minSilenceMs: number;
-  minSpeechMs: number;
-  targetPauseDurationMs: number;
-  paddingMs: number;
-  mergeGapMs: number;
-  pauseCompressionThresholdMs: number;
+export type EditAction = 'keep' | 'cut';
+
+export interface EditEntry {
+  id: string;
+  action: EditAction;
+  startMs: number;
+  endMs: number;
+  durationMs: number;
+  avgSpeechProb: number;
+  isCompressedPause?: boolean;
+  originalStartMs: number;
+  originalEndMs: number;
 }
 
-export type RuleFn = (segments: Segment[]) => Segment[];
-
-export function createDefaultRuleConfig(): RuleConfig {
-  return {
-    minSilenceMs: 500,
-    minSpeechMs: 300,
-    targetPauseDurationMs: 200,
-    paddingMs: 50,
-    mergeGapMs: 300,
-    pauseCompressionThresholdMs: 2000,
-  };
+export interface UserOverride {
+  id: string;
+  startMs: number;
+  endMs: number;
+  forcedAction: EditAction;
 }
 
-export function buildSegments(frames: VADFrame[]): Segment[] {
-  if (frames.length === 0) return [];
+export interface TimelineSettings {
+  minSilenceMs: number; // default 600
+  minSpeechMs: number; // default 100
+  pauseCompressionThresholdMs: number; // default 1200
+  targetPauseDurationMs: number; // default 250
+  paddingMs: number; // default 150
+  mergeGapMs: number; // default 300
+  speechThreshold: number; // 0.75
+  silenceThreshold: number; // 0.35
+  enablePauseCompression: boolean;
+}
 
-  const segments: Segment[] = [];
-  let currentType: "speech" | "silence" = frames[0].isSpeech
-    ? "speech"
-    : "silence";
-  let startMs = frames[0].startMs;
-  let totalProb = frames[0].speechProb;
-  let frameCount = 1;
+export const DEFAULT_TIMELINE_SETTINGS: TimelineSettings = {
+  minSilenceMs: 600,
+  minSpeechMs: 100,
+  pauseCompressionThresholdMs: 1200,
+  targetPauseDurationMs: 250,
+  paddingMs: 150,
+  mergeGapMs: 300,
+  speechThreshold: 0.75,
+  silenceThreshold: 0.35,
+  enablePauseCompression: true,
+};
 
-  for (let i = 1; i < frames.length; i++) {
-    const frame = frames[i];
-    const frameType: "speech" | "silence" = frame.isSpeech
-      ? "speech"
-      : "silence";
-
-    if (frameType !== currentType) {
-      segments.push({
-        id: `seg-${segments.length}`,
-        type: currentType,
-        startMs,
-        endMs: frames[i - 1].endMs,
-        avgSpeechProb: totalProb / frameCount,
-      });
-      currentType = frameType;
-      startMs = frame.startMs;
-      totalProb = frame.speechProb;
-      frameCount = 1;
-    } else {
-      totalProb += frame.speechProb;
-      frameCount++;
-    }
-  }
-
-  segments.push({
-    id: `seg-${segments.length}`,
-    type: currentType,
-    startMs,
-    endMs: frames[frames.length - 1].endMs,
-    avgSpeechProb: totalProb / frameCount,
-  });
-
-  return segments;
+export interface TimelineStats {
+  originalDurationMs: number;
+  outputDurationMs: number;
+  timeSavedMs: number;
+  timeSavedPercent: number;
+  totalCuts: number;
+  totalKeeps: number;
+  compressedPausesCount: number;
+  averageCutDurationMs: number;
 }

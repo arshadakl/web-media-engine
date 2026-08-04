@@ -1,165 +1,86 @@
-/**
- * Logger module for core/ utilities.
- * Development: colored console output with timestamp.
- * Production: in-memory buffer for debug panel.
- */
-
-export enum LogLevel {
-  DEBUG = 0,
-  INFO = 1,
-  WARN = 2,
-  ERROR = 3,
-}
-
-const LOG_LEVEL_NAMES: Record<LogLevel, string> = {
-  [LogLevel.DEBUG]: "DEBUG",
-  [LogLevel.INFO]: "INFO",
-  [LogLevel.WARN]: "WARN",
-  [LogLevel.ERROR]: "ERROR",
-};
-
-const LOG_LEVEL_COLORS: Record<LogLevel, string> = {
-  [LogLevel.DEBUG]: "\x1b[36m", // Cyan
-  [LogLevel.INFO]: "\x1b[32m", // Green
-  [LogLevel.WARN]: "\x1b[33m", // Yellow
-  [LogLevel.ERROR]: "\x1b[31m", // Red
-};
-
-const RESET_COLOR = "\x1b[0m";
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
 export interface LogEntry {
-  timestamp: Date;
+  id: string;
+  timestamp: number;
   level: LogLevel;
   module: string;
   message: string;
-  data?: unknown;
+  details?: unknown;
 }
 
-export interface LoggerOptions {
-  minLevel?: LogLevel;
-  production?: boolean;
-  maxBufferSize?: number;
-}
+type LogListener = (entry: LogEntry) => void;
 
-/**
- * Structured logger with level filtering and production buffering.
- */
-export class Logger {
-  private readonly module: string;
-  private readonly minLevel: LogLevel;
-  private readonly production: boolean;
-  private readonly buffer: LogEntry[] = [];
-  private readonly maxBufferSize: number;
+class StructuredLogger {
+  private logs: LogEntry[] = [];
+  private maxLogs = 500;
+  private listeners: Set<LogListener> = new Set();
+  private isDev = true;
 
-  constructor(module: string, options: LoggerOptions = {}) {
-    this.module = module;
-    this.minLevel = options.minLevel ?? LogLevel.DEBUG;
-    this.production = options.production ?? false;
-    this.maxBufferSize = options.maxBufferSize ?? 1000;
+  constructor() {
+    this.isDev = typeof process !== 'undefined' && process.env.NODE_ENV !== 'production';
   }
 
-  /**
-   * Log a debug message.
-   * @param message - The log message
-   * @param data - Optional additional data
-   */
-  debug(message: string, data?: unknown): void {
-    this.log(LogLevel.DEBUG, message, data);
-  }
-
-  /**
-   * Log an info message.
-   * @param message - The log message
-   * @param data - Optional additional data
-   */
-  info(message: string, data?: unknown): void {
-    this.log(LogLevel.INFO, message, data);
-  }
-
-  /**
-   * Log a warning message.
-   * @param message - The log message
-   * @param data - Optional additional data
-   */
-  warn(message: string, data?: unknown): void {
-    this.log(LogLevel.WARN, message, data);
-  }
-
-  /**
-   * Log an error message.
-   * @param message - The log message
-   * @param data - Optional additional data
-   */
-  error(message: string, data?: unknown): void {
-    this.log(LogLevel.ERROR, message, data);
-  }
-
-  /**
-   * Get all buffered log entries (production mode).
-   * @returns Array of log entries
-   */
-  getBuffer(): readonly LogEntry[] {
-    return this.buffer;
-  }
-
-  /**
-   * Clear the log buffer.
-   */
-  clearBuffer(): void {
-    this.buffer.length = 0;
-  }
-
-  /**
-   * Get the number of buffered entries.
-   * @returns Buffer size
-   */
-  getBufferSize(): number {
-    return this.buffer.length;
-  }
-
-  private log(level: LogLevel, message: string, data?: unknown): void {
-    if (level < this.minLevel) {
-      return;
-    }
-
+  private log(level: LogLevel, module: string, message: string, details?: unknown) {
     const entry: LogEntry = {
-      timestamp: new Date(),
+      id: Math.random().toString(36).substring(2, 9),
+      timestamp: Date.now(),
       level,
-      module: this.module,
+      module,
       message,
-      data,
+      details,
     };
 
-    if (this.production) {
-      this.buffer.push(entry);
-      if (this.buffer.length > this.maxBufferSize) {
-        this.buffer.shift();
+    this.logs.push(entry);
+    if (this.logs.length > this.maxLogs) {
+      this.logs.shift();
+    }
+
+    if (this.isDev) {
+      const timeStr = new Date(entry.timestamp).toISOString().split('T')[1]?.slice(0, 8);
+      const prefix = `[${timeStr}] [${entry.level}] [${entry.module}]`;
+      if (level === 'ERROR') {
+        console.error(prefix, message, details ?? '');
+      } else if (level === 'WARN') {
+        console.warn(prefix, message, details ?? '');
+      } else if (level === 'INFO') {
+        console.info(prefix, message, details ?? '');
+      } else {
+        console.debug(prefix, message, details ?? '');
       }
-    } else {
-      this.outputToConsole(entry);
     }
+
+    this.listeners.forEach((listener) => listener(entry));
   }
 
-  private outputToConsole(entry: LogEntry): void {
-    const timestamp = entry.timestamp.toISOString();
-    const levelName = LOG_LEVEL_NAMES[entry.level];
-    const color = LOG_LEVEL_COLORS[entry.level];
-    const prefix = `${color}[${timestamp}] ${levelName} [${entry.module}]${RESET_COLOR}`;
+  debug(module: string, message: string, details?: unknown) {
+    this.log('DEBUG', module, message, details);
+  }
 
-    if (entry.data !== undefined) {
-      console.log(`${prefix} ${entry.message}`, entry.data);
-    } else {
-      console.log(`${prefix} ${entry.message}`);
-    }
+  info(module: string, message: string, details?: unknown) {
+    this.log('INFO', module, message, details);
+  }
+
+  warn(module: string, message: string, details?: unknown) {
+    this.log('WARN', module, message, details);
+  }
+
+  error(module: string, message: string, details?: unknown) {
+    this.log('ERROR', module, message, details);
+  }
+
+  getLogs(): LogEntry[] {
+    return [...this.logs];
+  }
+
+  clear() {
+    this.logs = [];
+  }
+
+  subscribe(listener: LogListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 }
 
-/**
- * Create a logger instance for a module.
- * @param module - Module name for log prefix
- * @param options - Logger configuration options
- * @returns Logger instance
- */
-export function createLogger(module: string, options?: LoggerOptions): Logger {
-  return new Logger(module, options);
-}
+export const logger = new StructuredLogger();

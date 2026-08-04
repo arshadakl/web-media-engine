@@ -1,59 +1,8 @@
-# Nuxt dev/build outputs
-.output
-.data
-.nuxt
-.nitro
-.cache
-dist
-
-# Node dependencies
-node_modules
-.pnpm-store
-
-# Logs
-logs
-*.log
-
-# Misc
-.DS_Store
-.fleet
-.idea
-Thumbs.db
-
-# Local env files
-.env
-.env.*
-!.env.example
-
-# Testing
+node_modules/
+build/
+dist/
 coverage/
-test-results/
-playwright-report/
-blob-report/
-
-# TypeScript
-*.tsbuildinfo
-
-# ESLint
-.eslintcache
-
-# Cloudflare
-.wrangler/
-.dev.vars
-
-# WASM binaries (downloaded/cached at runtime)
-*.wasm
-
-# Large binary fixtures (test files)
-tests/fixtures/*.mp4
-tests/fixtures/*.mkv
-tests/fixtures/*.webm
-tests/fixtures/*.avi
-tests/fixtures/*.mov
-
-# Generated files (re-generate as needed)
-public/models/*.onnx
-
-# Development plan files (internal docs, not source code)
-silence-cutter-dev-plan.md
-OPCODEX-DEV-PLAN.md
+.DS_Store
+*.log
+.env*
+!.env.example
