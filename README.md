@@ -11,7 +11,6 @@ Browser-native video silence removal. No server, no upload — everything runs c
 | State | React hooks (useState/useMemo) |
 | Voice Detection | Silero VAD (ONNX Runtime Web) |
 | Audio Extraction | Web Audio API |
-| AI Integration | Gemini API (optional) |
 | Deploy | Cloudflare Pages |
 
 ## Processing Pipeline
@@ -79,10 +78,6 @@ bun run preview
 
 # Type check
 bun run typecheck
-```
-
-```bash
-GEMINI_API_KEY=your_api_key_here
 ```
 
 ## Deploy to Cloudflare Pages
