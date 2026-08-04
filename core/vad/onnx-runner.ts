@@ -22,9 +22,9 @@ export class SileroOnnxRunner {
   public async loadModel(modelUrl = '/models/silero_vad.onnx'): Promise<boolean> {
     try {
       const ort = await import('onnxruntime-web');
-      // Set WASM paths if needed
-      ort.env.wasm.numThreads = Math.min(4, typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 2 : 2);
-      
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.wasmPaths = { 'ort-wasm-simd-threaded.wasm': '/ort-wasm.wasm' };
+
       this.session = await ort.InferenceSession.create(modelUrl, {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
