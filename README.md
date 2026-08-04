@@ -1,6 +1,6 @@
 # Silence Cutter
 
-Browser-native video silence removal. No server, no upload — everything runs client-side.
+Browser-native video silence removal. No server, no upload ï¿½ everything runs client-side.
 
 ## Tech Stack
 
@@ -11,47 +11,46 @@ Browser-native video silence removal. No server, no upload — everything runs cli
 | State | React hooks (useState/useMemo) |
 | Voice Detection | Silero VAD (ONNX Runtime Web) |
 | Audio Extraction | Web Audio API |
-| AI Integration | Gemini API (optional) |
 | Deploy | Cloudflare Pages |
 
 ## Processing Pipeline
 
 ```
 Input Video
-    ¦
+    ï¿½
     ?
 +---------------------+
-¦  File Ingestion     ¦  <input> or synthetic demo generator
+ï¿½  File Ingestion     ï¿½  <input> or synthetic demo generator
 +---------------------+
-          ¦
+          ï¿½
           ?
 +---------------------+
-¦  Audio Extraction   ¦  Web Audio API decodeAudioData ? PCM
+ï¿½  Audio Extraction   ï¿½  Web Audio API decodeAudioData ? PCM
 +---------------------+
-          ¦
+          ï¿½
           ?
 +---------------------+
-¦  VAD Analysis       ¦  Silero VAD (ONNX) — speech/non-speech detection
-¦  (20ms frames)      ¦  Hysteresis: prevents jitter at boundaries
+ï¿½  VAD Analysis       ï¿½  Silero VAD (ONNX) ï¿½ speech/non-speech detection
+ï¿½  (20ms frames)      ï¿½  Hysteresis: prevents jitter at boundaries
 +---------------------+
-          ¦
+          ï¿½
           ?
 +---------------------+
-¦  Timeline Builder   ¦  VAD frames ? Segments ? EDL
-¦  (rules engine)     ¦  4 rules: min silence, min speech, padding, merge
+ï¿½  Timeline Builder   ï¿½  VAD frames ? Segments ? EDL
+ï¿½  (rules engine)     ï¿½  4 rules: min silence, min speech, padding, merge
 +---------------------+
-          ¦
+          ï¿½
           ?
 +---------------------+
-¦  Interactive Edit   ¦  Click/drag on waveform to override cuts
-¦  (preview player)   ¦  Seek-loop playback of keep segments
+ï¿½  Interactive Edit   ï¿½  Click/drag on waveform to override cuts
+ï¿½  (preview player)   ï¿½  Seek-loop playback of keep segments
 +---------------------+
-          ¦
+          ï¿½
           ?
 +---------------------+
-¦  Export             ¦  Download processed audio/video
+ï¿½  Export             ï¿½  Download processed audio/video
 +---------------------+
-          ¦
+          ï¿½
           ?
     Output File
 ```
@@ -79,14 +78,6 @@ bun run preview
 
 # Type check
 bun run typecheck
-```
-
-### Environment Variables
-
-Copy .env.example to .env.local and set your Gemini API key (optional):
-
-```bash
-GEMINI_API_KEY=your_api_key_here
 ```
 
 ## Deploy to Cloudflare Pages
@@ -118,16 +109,16 @@ wrangler pages deploy dist --project-name=silence-cutter
 
 ```
 +-- core/                  # Core logic (framework-agnostic)
-¦   +-- audio/             # Audio processing (extractor, chunker, RMS)
-¦   +-- export/            # Export functionality
-¦   +-- timeline/          # Timeline builder, EDL, merger
-¦   +-- utils/             # Utilities (logger, memory guard, etc.)
-¦   +-- vad/               # Voice Activity Detection (Silero VAD)
+ï¿½   +-- audio/             # Audio processing (extractor, chunker, RMS)
+ï¿½   +-- export/            # Export functionality
+ï¿½   +-- timeline/          # Timeline builder, EDL, merger
+ï¿½   +-- utils/             # Utilities (logger, memory guard, etc.)
+ï¿½   +-- vad/               # Voice Activity Detection (Silero VAD)
 +-- src/
-¦   +-- App.tsx            # Main application component
-¦   +-- components/        # React UI components
-¦   +-- main.tsx           # Entry point
-¦   +-- types.ts           # TypeScript type definitions
+ï¿½   +-- App.tsx            # Main application component
+ï¿½   +-- components/        # React UI components
+ï¿½   +-- main.tsx           # Entry point
+ï¿½   +-- types.ts           # TypeScript type definitions
 +-- index.html             # HTML entry point
 +-- vite.config.ts         # Vite configuration
 +-- wrangler.toml          # Cloudflare Pages configuration
